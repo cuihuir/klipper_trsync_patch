@@ -70,30 +70,32 @@ cd klipper_trsync_patch
 `.patch` 文件是 Git 格式的补丁文件，包含了所有代码更改的 diff 信息。可以直接应用到 Klipper 源码：
 
 ```bash
-# 进入 Klipper 目录
+# 进入 Klipper 目录（默认安装路径）
 cd ~/klipper
 
 # 应用 patch
-git apply /path/to/klipper_trsync_adaptive.patch
+git apply ~/klipper_trsync_patch/klipper_trsync_adaptive.patch
 
 # 如果出错，可以先检查是否能应用
-git apply --check /path/to/klipper_trsync_adaptive.patch
+git apply --check ~/klipper_trsync_patch/klipper_trsync_adaptive.patch
 ```
 
-**注意**：使用 patch 方式需要确保 Klipper 源码是干净的 git 仓库。
+**注意**：如果你的 Klipper 安装在其他路径，请替换 `~/klipper` 为实际路径。
 
 **方法 3: 手动复制文件**
 
 ```bash
 # 复制新模块
-cp klipper_trsync_patch/klipper/klippy/extras/trsync_adaptive.py \
+cp ~/klipper_trsync_patch/klipper/klippy/extras/trsync_adaptive.py \
    ~/klipper/klippy/extras/
 
 # 复制修改的 mcu.py（建议先备份）
 cp ~/klipper/klippy/mcu.py ~/klipper/klippy/mcu.py.backup
-cp klipper_trsync_patch/klipper/klippy/mcu.py \
+cp ~/klipper_trsync_patch/klipper/klippy/mcu.py \
    ~/klipper/klippy/mcu.py
 ```
+
+**注意**：如果你的 Klipper 安装在其他路径，请替换 `~/klipper` 为实际路径。
 
 ### 2. 配置
 
