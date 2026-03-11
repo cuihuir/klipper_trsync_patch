@@ -1,0 +1,163 @@
+#!/bin/bash
+# Klipper TRSYNC Adaptive Timeout 安装脚本
+
+set -e
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# 打印函数
+print_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+print_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# 检查是否以 root 运行
+if [ "$EUID" -eq 0 ]; then
+    print_error "请不要以 root 用户运行此脚本"
+    exit 1
+fi
+
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 默认 Klipper 路径
+KLIPPER_PATH="${HOME}/klipper"
+
+# 解析命令行参数
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --klipper-path)
+            KLIPPER_PATH="$2"
+            shift 2
+            ;;
+        --help)
+            echo "用法: $0 [选项]"
+            echo ""
+            echo "选项:"
+            echo "  --klipper-path PATH    指定 Klipper 安装路径 (默认: ~/klipper)"
+            echo "  --help                 显示此帮助信息"
+            exit 0
+            ;;
+        *)
+            print_error "未知选项: $1"
+            echo "使用 --help 查看帮助"
+            exit 1
+            ;;
+    esac
+done
+
+print_info "Klipper TRSYNC Adaptive Timeout 安装脚本"
+echo ""
+
+# 检查 Klipper 路径
+if [ ! -d "$KLIPPER_PATH" ]; then
+    print_error "Klipper 路径不存在: $KLIPPER_PATH"
+    print_info "请使用 --klipper-path 指定正确的路径"
+    exit 1
+fi
+
+if [ ! -f "$KLIPPER_PATH/klippy/klippy.py" ]; then
+    print_error "无效的 Klipper 安装: $KLIPPER_PATH"
+    exit 1
+fi
+
+print_info "找到 Klipper 安装: $KLIPPER_PATH"
+
+# 备份原始文件
+print_info "备份原始文件..."
+BACKUP_DIR="$KLIPPER_PATH/klippy/.backup_trsync_adaptive_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+
+if [ -f "$KLIPPER_PATH/klippy/mcu.py" ]; then
+    cp "$KLIPPER_PATH/klippy/mcu.py" "$BACKUP_DIR/mcu.py"
+    print_info "已备份: mcu.py -> $BACKUP_DIR/mcu.py"
+fi
+
+# 复制新文件
+print_info "安装新文件..."
+
+# 复制 trsync_adaptive.py
+cp "$SCRIPT_DIR/klipper/klippy/extras/trsync_adaptive.py" \
+   "$KLIPPER_PATH/klippy/extras/trsync_adaptive.py"
+print_info "已安装: trsync_adaptive.py"
+
+# 复制 mcu.py
+cp "$SCRIPT_DIR/klipper/klippy/mcu.py" \
+   "$KLIPPER_PATH/klippy/mcu.py"
+print_info "已安装: mcu.py"
+
+# 检查 printer.cfg
+print_info "检查配置文件..."
+PRINTER_CFG="${HOME}/printer_data/config/printer.cfg"
+
+if [ ! -f "$PRINTER_CFG" ]; then
+    # 尝试旧路径
+    PRINTER_CFG="${HOME}/klipper_config/printer.cfg"
+fi
+
+if [ -f "$PRINTER_CFG" ]; then
+    if grep -q "trsync_timeout_mode" "$PRINTER_CFG"; then
+        print_warn "printer.cfg 中已存在 trsync_timeout_mode 配置"
+    else
+        print_warn "需要手动配置 printer.cfg"
+        print_info "请在 [printer] 段添加以下配置："
+        echo ""
+        echo "  [printer]"
+        echo "  trsync_timeout_mode: adaptive"
+        echo "  trsync_min_timeout: 0.025"
+        echo "  trsync_max_timeout: 0.120"
+        echo "  trsync_margin: 0.008"
+        echo "  trsync_sigma_multiplier: 4.0"
+        echo "  trsync_ewma_alpha: 0.2"
+        echo ""
+        print_info "详细配置说明请参考: $SCRIPT_DIR/docs/printer.cfg.example"
+    fi
+else
+    print_warn "未找到 printer.cfg，请手动配置"
+fi
+
+# 重启 Klipper
+echo ""
+read -p "是否立即重启 Klipper 服务? (y/N) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    print_info "重启 Klipper 服务..."
+    sudo systemctl restart klipper
+    sleep 2
+
+    if systemctl is-active --quiet klipper; then
+        print_info "Klipper 服务已成功重启"
+    else
+        print_error "Klipper 服务启动失败，请检查日志:"
+        echo "  journalctl -u klipper -n 50"
+        exit 1
+    fi
+else
+    print_warn "请稍后手动重启 Klipper:"
+    echo "  sudo systemctl restart klipper"
+fi
+
+echo ""
+print_info "安装完成！"
+echo ""
+print_info "后续步骤:"
+echo "  1. 编辑 printer.cfg 添加 adaptive timeout 配置"
+echo "  2. 重启 Klipper (如果尚未重启)"
+echo "  3. 测试 Z homing: G28 Z"
+echo "  4. 查看日志: tail -f /tmp/klippy.log | grep -i trsync"
+echo ""
+print_info "如需回退，请恢复备份文件:"
+echo "  cp $BACKUP_DIR/mcu.py $KLIPPER_PATH/klippy/mcu.py"
+echo "  rm $KLIPPER_PATH/klippy/extras/trsync_adaptive.py"
+echo "  sudo systemctl restart klipper"

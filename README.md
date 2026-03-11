@@ -48,12 +48,29 @@ klipper_trsync_patch/
 
 ### 1. 应用补丁
 
+**方法 1: 使用安装脚本（推荐）**
+
 ```bash
-# 方法 1: 使用 git patch（推荐）
+cd klipper_trsync_patch
+./install.sh
+```
+
+安装脚本会自动：
+- 备份原始文件
+- 复制新文件到 Klipper 目录
+- 提示配置 printer.cfg
+- 可选重启 Klipper 服务
+
+**方法 2: 使用 git patch**
+
+```bash
 cd /path/to/klipper
 git apply /path/to/klipper_trsync_adaptive.patch
+```
 
-# 方法 2: 手动复制文件
+**方法 3: 手动复制文件**
+
+```bash
 cp klipper_trsync_patch/klipper/klippy/extras/trsync_adaptive.py \
    /path/to/klipper/klippy/extras/
 cp klipper_trsync_patch/klipper/klippy/mcu.py \
