@@ -626,8 +626,15 @@ class MCU_adc:
         self._min_sample = minval
         self._max_sample = maxval
         self._range_check_count = range_check_count
-    def setup_adc_callback(self, callback):
-        self._callback = callback
+    def setup_adc_callback(self, report_time, callback=None):
+        # 兼容新旧版本：旧版本传两个参数，新版本传一个参数
+        if callback is None:
+            # 新版本：第一个参数实际是 callback
+            self._callback = report_time
+        else:
+            # 旧版本：两个参数都传了
+            self._report_time = report_time
+            self._callback = callback
     def get_last_value(self):
         return self._last_state
     def _build_config(self):
