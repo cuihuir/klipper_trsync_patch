@@ -12,7 +12,7 @@ import math
 
 # 添加 klippy 路径
 klippy_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           'klipper_origin/klipper/klippy')
+                           'klipper/klippy')
 sys.path.insert(0, klippy_path)
 
 class MockConfig:

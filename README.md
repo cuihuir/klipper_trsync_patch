@@ -36,12 +36,11 @@ klipper_trsync_patch/
 ├── docs/
 │   ├── DEPLOYMENT.md                   # 部署指南
 │   └── printer.cfg.example             # 配置示例
-├── klipper_origin/
-│   └── klipper/
-│       └── klippy/
-│           ├── mcu.py                  # 修改：添加 adaptive timeout 支持
-│           └── extras/
-│               └── trsync_adaptive.py  # 新增：adaptive timeout 模块
+├── klipper/
+│   └── klippy/
+│       ├── mcu.py                      # 修改：添加 adaptive timeout 支持
+│       └── extras/
+│           └── trsync_adaptive.py      # 新增：adaptive timeout 模块
 └── test_trsync_adaptive.py             # 单元测试
 ```
 
@@ -55,9 +54,9 @@ cd /path/to/klipper
 git apply /path/to/klipper_trsync_adaptive.patch
 
 # 方法 2: 手动复制文件
-cp klipper_origin/klipper/klippy/extras/trsync_adaptive.py \
+cp klipper_trsync_patch/klipper/klippy/extras/trsync_adaptive.py \
    /path/to/klipper/klippy/extras/
-cp klipper_origin/klipper/klippy/mcu.py \
+cp klipper_trsync_patch/klipper/klippy/mcu.py \
    /path/to/klipper/klippy/mcu.py
 ```
 
