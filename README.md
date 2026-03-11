@@ -32,16 +32,20 @@ timeout = clamp(
 
 ```
 klipper_trsync_patch/
-├── README.md                           # 本文档
-├── docs/
-│   ├── DEPLOYMENT.md                   # 部署指南
-│   └── printer.cfg.example             # 配置示例
-├── klipper/
+├── README.md                      # 本文档
+├── install.sh                     # 自动安装脚本
+├── uninstall.sh                   # 自动卸载脚本
+├── test_trsync_adaptive.py        # 单元测试
+├── klipper_trsync_adaptive.patch  # Git patch 文件
+├── klipper/                       # 修改后的源码
 │   └── klippy/
-│       ├── mcu.py                      # 修改：添加 adaptive timeout 支持
+│       ├── mcu.py                 # 修改：添加 adaptive timeout 支持
 │       └── extras/
-│           └── trsync_adaptive.py      # 新增：adaptive timeout 模块
-└── test_trsync_adaptive.py             # 单元测试
+│           └── trsync_adaptive.py # 新增：adaptive timeout 模块
+└── docs/                          # 设计文档（不提交到 git）
+    ├── DEPLOYMENT.md              # 详细部署指南
+    ├── printer.cfg.example        # 配置示例
+    └── design.md                  # 设计文档
 ```
 
 ## 快速开始
@@ -61,20 +65,34 @@ cd klipper_trsync_patch
 - 提示配置 printer.cfg
 - 可选重启 Klipper 服务
 
-**方法 2: 使用 git patch**
+**方法 2: 使用 Git Patch**
+
+`.patch` 文件是 Git 格式的补丁文件，包含了所有代码更改的 diff 信息。可以直接应用到 Klipper 源码：
 
 ```bash
-cd /path/to/klipper
+# 进入 Klipper 目录
+cd ~/klipper
+
+# 应用 patch
 git apply /path/to/klipper_trsync_adaptive.patch
+
+# 如果出错，可以先检查是否能应用
+git apply --check /path/to/klipper_trsync_adaptive.patch
 ```
+
+**注意**：使用 patch 方式需要确保 Klipper 源码是干净的 git 仓库。
 
 **方法 3: 手动复制文件**
 
 ```bash
+# 复制新模块
 cp klipper_trsync_patch/klipper/klippy/extras/trsync_adaptive.py \
-   /path/to/klipper/klippy/extras/
+   ~/klipper/klippy/extras/
+
+# 复制修改的 mcu.py（建议先备份）
+cp ~/klipper/klippy/mcu.py ~/klipper/klippy/mcu.py.backup
 cp klipper_trsync_patch/klipper/klippy/mcu.py \
-   /path/to/klipper/klippy/mcu.py
+   ~/klipper/klippy/mcu.py
 ```
 
 ### 2. 配置
@@ -154,9 +172,18 @@ Klipper TRSYNC Adaptive Timeout 单元测试
 
 ## 配置调优
 
-详细配置说明请参考：
-- [docs/printer.cfg.example](docs/printer.cfg.example) - 配置参数详解
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - 完整部署指南
+详细配置说明请参考 `docs/printer.cfg.example` 文件。
+
+### 配置参数说明
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| trsync_timeout_mode | fixed | fixed（固定）或 adaptive（自适应） |
+| trsync_min_timeout | 0.025s | 最小 timeout，防止过小导致误判 |
+| trsync_max_timeout | 0.120s | 最大 timeout，防止故障时长时间运动 |
+| trsync_margin | 0.008s | Linux 调度余量 |
+| trsync_sigma_multiplier | 4.0 | Jitter 放大倍数（4.0 对应 99.99% 置信度） |
+| trsync_ewma_alpha | 0.2 | EWMA 平滑系数，越小越平滑 |
 
 ## 优势
 
