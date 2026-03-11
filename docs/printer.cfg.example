@@ -1,0 +1,89 @@
+# Klipper TRSYNC Adaptive Timeout 配置示例
+#
+# 此配置用于解决 multi-MCU + CAN toolhead 环境下的 "Communication timeout during homing" 错误
+#
+# 使用方法：
+# 1. 将以下配置添加到你的 printer.cfg 文件的 [printer] 段
+# 2. 重启 Klipper 服务：sudo systemctl restart klipper
+# 3. 测试 Z homing 是否正常
+
+[printer]
+# TRSYNC Timeout 模式
+# - "fixed": 使用固定 timeout（默认，保持原始行为）
+# - "adaptive": 使用自适应 timeout（推荐用于 multi-MCU + CAN 环境）
+trsync_timeout_mode: adaptive
+
+# 最小 timeout（秒）
+# 默认: 0.025 (25ms)
+# 说明: 即使计算出的 timeout 更小，也不会低于此值
+# 建议: 保持默认值，除非你的系统非常稳定
+trsync_min_timeout: 0.025
+
+# 最大 timeout（秒）
+# 默认: 0.120 (120ms)
+# 说明: 防止 probe/endstop 故障时电机长时间运动
+# 建议: 根据你的系统延迟调整，CAN 环境可能需要更大值
+trsync_max_timeout: 0.120
+
+# Linux 调度余量（秒）
+# 默认: 0.008 (8ms)
+# 说明: 补偿 Linux 调度抖动和其他系统延迟
+# 建议: 如果仍有偶发 timeout，可以增加到 0.010 或 0.012
+trsync_margin: 0.008
+
+# Jitter 放大倍数
+# 默认: 4.0
+# 说明: RTT 标准差的放大倍数，用于应对突发延迟
+# 建议: 4.0 对应 99.99% 置信区间（假设正态分布）
+trsync_sigma_multiplier: 4.0
+
+# EWMA 平滑系数
+# 默认: 0.2
+# 说明: 控制 RTT 平滑程度，越小越平滑但响应越慢
+# 范围: 0.01 - 1.0
+# 建议: 0.2 是平衡值，如果 RTT 波动大可以降低到 0.1
+trsync_ewma_alpha: 0.2
+
+# ============================================================
+# 典型配置场景
+# ============================================================
+
+# 场景 1: Single MCU（不需要 adaptive）
+# trsync_timeout_mode: fixed
+
+# 场景 2: Multi-MCU + USB（轻度延迟）
+# trsync_timeout_mode: adaptive
+# trsync_min_timeout: 0.025
+# trsync_max_timeout: 0.080
+# trsync_margin: 0.008
+
+# 场景 3: Multi-MCU + CAN（中度延迟）
+# trsync_timeout_mode: adaptive
+# trsync_min_timeout: 0.025
+# trsync_max_timeout: 0.120
+# trsync_margin: 0.010
+
+# 场景 4: Multi-MCU + CAN + 高负载（重度延迟）
+# trsync_timeout_mode: adaptive
+# trsync_min_timeout: 0.030
+# trsync_max_timeout: 0.150
+# trsync_margin: 0.012
+# trsync_sigma_multiplier: 5.0
+
+# ============================================================
+# 调试和监控
+# ============================================================
+#
+# 查看 adaptive timeout 日志：
+#   tail -f /tmp/klippy.log | grep -i trsync
+#
+# 你会看到类似的日志：
+#   TRSyncAdaptive initialized for MCU 'mcu': min=0.025 max=0.120 ...
+#   TriggerDispatch.start: Using adaptive timeout=0.045123 s for 2 MCU(s)
+#   TRSyncAdaptive timeout for MCU 'mcu': rtt_avg=0.012000 std=0.003000 timeout=0.045123
+#
+# 如果仍然出现 timeout 错误：
+# 1. 检查日志中的 rtt_avg 和 timeout 值
+# 2. 如果 timeout 已经达到 max_timeout，说明需要增加 max_timeout
+# 3. 如果 rtt_avg 波动很大，可以降低 trsync_ewma_alpha
+# 4. 如果偶发 timeout，可以增加 trsync_margin 或 trsync_sigma_multiplier
