@@ -95,5 +95,8 @@ class TRSyncAdaptive:
         return timeout
 
 def load_config(config):
-    """Klipper 模块加载入口（虽然这个模块不直接作为配置段加载）"""
-    return TRSyncAdaptive(config, None)
+    """Klipper 模块加载入口 - 支持 [trsync_adaptive] 配置段"""
+    # 这个函数会在配置加载时被调用，但实际的初始化由 TriggerDispatch 完成
+    # 这里只是为了让 Klipper 识别这个配置段
+    logging.info("TRSyncAdaptive config section registered")
+    return None

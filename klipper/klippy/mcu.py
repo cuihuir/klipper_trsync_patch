@@ -248,16 +248,23 @@ class TriggerDispatch:
         ffi_main, ffi_lib = chelper.get_ffi()
         self._trdispatch = ffi_main.gc(ffi_lib.trdispatch_alloc(), ffi_lib.free)
         self._trsyncs = [MCU_trsync(mcu, self._trdispatch)]
-        # Adaptive timeout support
+        # Adaptive timeout support - 延迟初始化
         self._adaptive_timeout = None
+        self._mcu_name = mcu.get_name()
         printer = mcu.get_printer()
-        config = printer.lookup_object('configfile').read_main_config()
-        timeout_mode = config.get('printer', 'trsync_timeout_mode', 'fixed')
-        if timeout_mode == 'adaptive':
-            logging.info("TriggerDispatch: Adaptive timeout mode enabled")
-            self._adaptive_timeout = trsync_adaptive.TRSyncAdaptive(config.getsection('printer'), mcu)
+        printer.register_event_handler("klippy:connect", self._handle_connect)
+    def _handle_connect(self):
+        """在 Klipper 连接后初始化 adaptive timeout"""
+        printer = self._mcu.get_printer()
+        config = printer.lookup_object('configfile')
+        # 尝试查找 [trsync_adaptive] 或 [trsync_adaptive mcu_name] 配置段
+        section_name = 'trsync_adaptive'
+        if config.has_section(section_name):
+            logging.info("TriggerDispatch: Adaptive timeout mode enabled for MCU '%s'", self._mcu_name)
+            trsync_config = config.getsection(section_name)
+            self._adaptive_timeout = trsync_adaptive.TRSyncAdaptive(trsync_config, self._mcu)
         else:
-            logging.info("TriggerDispatch: Fixed timeout mode (default)")
+            logging.info("TriggerDispatch: Fixed timeout mode (default) for MCU '%s'", self._mcu_name)
     def get_oid(self):
         return self._trsyncs[0].get_oid()
     def get_command_queue(self):
