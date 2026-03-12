@@ -10,21 +10,32 @@ class TRSyncAdaptive:
     动态计算 TRSYNC timeout，基于实时 RTT 测量
     使用 EWMA (指数加权移动平均) 算法平滑 RTT 波动
     """
-    def __init__(self, config, mcu):
+    def __init__(self, config_or_dict, mcu):
         self.mcu = mcu
-        self.printer = config.get_printer()
+        self.printer = mcu.get_printer()
 
-        # 读取配置参数
-        self.min_timeout = config.getfloat('trsync_min_timeout', 0.025,
-                                           minval=0.010, maxval=0.500)
-        self.max_timeout = config.getfloat('trsync_max_timeout', 0.120,
-                                           minval=0.050, maxval=1.000)
-        self.margin = config.getfloat('trsync_margin', 0.008,
-                                      minval=0.000, maxval=0.100)
-        self.sigma_mult = config.getfloat('trsync_sigma_multiplier', 4.0,
-                                          minval=1.0, maxval=10.0)
-        self.alpha = config.getfloat('trsync_ewma_alpha', 0.2,
-                                     minval=0.01, maxval=1.0)
+        # 支持两种初始化方式：config 对象或配置字典
+        if hasattr(config_or_dict, 'getfloat'):
+            # 旧方式：从 config 对象读取
+            config = config_or_dict
+            self.min_timeout = config.getfloat('trsync_min_timeout', 0.025,
+                                               minval=0.010, maxval=0.500)
+            self.max_timeout = config.getfloat('trsync_max_timeout', 0.120,
+                                               minval=0.050, maxval=1.000)
+            self.margin = config.getfloat('trsync_margin', 0.008,
+                                          minval=0.000, maxval=0.100)
+            self.sigma_mult = config.getfloat('trsync_sigma_multiplier', 4.0,
+                                              minval=1.0, maxval=10.0)
+            self.alpha = config.getfloat('trsync_ewma_alpha', 0.2,
+                                         minval=0.01, maxval=1.0)
+        else:
+            # 新方式：从配置字典读取
+            config_dict = config_or_dict
+            self.min_timeout = config_dict['min_timeout']
+            self.max_timeout = config_dict['max_timeout']
+            self.margin = config_dict['margin']
+            self.sigma_mult = config_dict['sigma_multiplier']
+            self.alpha = config_dict['ewma_alpha']
 
         # EWMA 状态变量
         self.rtt_avg = 0.
@@ -96,7 +107,31 @@ class TRSyncAdaptive:
 
 def load_config(config):
     """Klipper 模块加载入口 - 支持 [trsync_adaptive] 配置段"""
-    # 这个函数会在配置加载时被调用，但实际的初始化由 TriggerDispatch 完成
-    # 这里只是为了让 Klipper 识别这个配置段
-    logging.info("TRSyncAdaptive config section registered")
+    # 这里读取并验证配置参数，但实际的 TRSyncAdaptive 对象由 TriggerDispatch 创建
+    printer = config.get_printer()
+
+    # 读取并验证参数（让 Klipper 知道这些参数是有效的）
+    min_timeout = config.getfloat('trsync_min_timeout', 0.025,
+                                  minval=0.010, maxval=0.500)
+    max_timeout = config.getfloat('trsync_max_timeout', 0.120,
+                                  minval=0.050, maxval=1.000)
+    margin = config.getfloat('trsync_margin', 0.008,
+                            minval=0.000, maxval=0.100)
+    sigma_mult = config.getfloat('trsync_sigma_multiplier', 4.0,
+                                minval=1.0, maxval=10.0)
+    alpha = config.getfloat('trsync_ewma_alpha', 0.2,
+                           minval=0.01, maxval=1.0)
+
+    # 将参数存储在 printer 对象中，供 TriggerDispatch 使用
+    trsync_config = {
+        'min_timeout': min_timeout,
+        'max_timeout': max_timeout,
+        'margin': margin,
+        'sigma_multiplier': sigma_mult,
+        'ewma_alpha': alpha
+    }
+    printer.set_unknown('trsync_adaptive_config', trsync_config)
+
+    logging.info("TRSyncAdaptive config section loaded: min=%.3f max=%.3f margin=%.3f sigma=%.1f alpha=%.2f",
+                 min_timeout, max_timeout, margin, sigma_mult, alpha)
     return None

@@ -256,14 +256,16 @@ class TriggerDispatch:
     def _handle_connect(self):
         """在 Klipper 连接后初始化 adaptive timeout"""
         printer = self._mcu.get_printer()
-        config = printer.lookup_object('configfile')
-        # 尝试查找 [trsync_adaptive] 配置段
+        # 尝试获取存储的配置
         try:
-            trsync_config = config.getsection('trsync_adaptive')
-            logging.info("TriggerDispatch: Adaptive timeout mode enabled for MCU '%s'", self._mcu_name)
-            self._adaptive_timeout = trsync_adaptive.TRSyncAdaptive(trsync_config, self._mcu)
+            trsync_config_dict = printer.get_unknown('trsync_adaptive_config')
+            if trsync_config_dict:
+                logging.info("TriggerDispatch: Adaptive timeout mode enabled for MCU '%s'", self._mcu_name)
+                self._adaptive_timeout = trsync_adaptive.TRSyncAdaptive(trsync_config_dict, self._mcu)
+            else:
+                logging.info("TriggerDispatch: Fixed timeout mode (default) for MCU '%s'", self._mcu_name)
         except:
-            # 如果没有找到配置段，使用固定超时模式
+            # 如果没有找到配置，使用固定超时模式
             logging.info("TriggerDispatch: Fixed timeout mode (default) for MCU '%s'", self._mcu_name)
     def get_oid(self):
         return self._trsyncs[0].get_oid()
