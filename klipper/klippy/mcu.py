@@ -543,10 +543,28 @@ class MCU_adc:
         self._inv_max_adc = 0.
     def get_mcu(self):
         return self._mcu
-    def setup_adc_sample(self, sample_time, sample_count,
-                         minval=0., maxval=1., range_check_count=0):
-        self._sample_time = sample_time
-        self._sample_count = sample_count
+    def setup_adc_sample(self, report_time, sample_time=None, sample_count=None,
+                         batch_num=1, minval=0., maxval=1., range_check_count=0):
+        # 兼容新旧版本：
+        # 新版本：setup_adc_sample(report_time, sample_time, sample_count, minval=..., maxval=...)
+        # 旧版本：setup_adc_sample(sample_time, sample_count, minval=..., maxval=...)
+        if sample_time is None:
+            # 旧版本调用方式：setup_adc_sample(sample_time, sample_count, ...)
+            # 第一个参数实际是 sample_time
+            self._sample_time = report_time
+            self._sample_count = batch_num if isinstance(batch_num, int) and batch_num > 1 else 1
+        elif sample_count is None:
+            # 旧版本调用方式：setup_adc_sample(sample_time, sample_count, ...)
+            # report_time 是 sample_time, sample_time 是 sample_count
+            self._sample_time = report_time
+            self._sample_count = sample_time if isinstance(sample_time, int) else 1
+        else:
+            # 新版本调用方式：setup_adc_sample(report_time, sample_time, sample_count, ...)
+            self._report_time = report_time
+            self._sample_time = sample_time
+            self._sample_count = sample_count
+            self._batch_num = max(1, min(48 // 2, batch_num))
+
         self._min_sample = minval
         self._max_sample = maxval
         self._range_check_count = range_check_count
