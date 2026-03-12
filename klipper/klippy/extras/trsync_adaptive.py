@@ -5,6 +5,9 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging, math
 
+# 全局配置存储
+_trsync_adaptive_configs = {}
+
 class TRSyncAdaptive:
     """
     动态计算 TRSYNC timeout，基于实时 RTT 测量
@@ -108,7 +111,6 @@ class TRSyncAdaptive:
 def load_config(config):
     """Klipper 模块加载入口 - 支持 [trsync_adaptive] 配置段"""
     # 这里读取并验证配置参数，但实际的 TRSyncAdaptive 对象由 TriggerDispatch 创建
-    printer = config.get_printer()
 
     # 读取并验证参数（让 Klipper 知道这些参数是有效的）
     min_timeout = config.getfloat('trsync_min_timeout', 0.025,
@@ -122,7 +124,7 @@ def load_config(config):
     alpha = config.getfloat('trsync_ewma_alpha', 0.2,
                            minval=0.01, maxval=1.0)
 
-    # 将参数存储在 printer 对象中，供 TriggerDispatch 使用
+    # 将参数存储在全局字典中，供 TriggerDispatch 使用
     trsync_config = {
         'min_timeout': min_timeout,
         'max_timeout': max_timeout,
@@ -130,7 +132,7 @@ def load_config(config):
         'sigma_multiplier': sigma_mult,
         'ewma_alpha': alpha
     }
-    printer.set_unknown('trsync_adaptive_config', trsync_config)
+    _trsync_adaptive_configs['default'] = trsync_config
 
     logging.info("TRSyncAdaptive config section loaded: min=%.3f max=%.3f margin=%.3f sigma=%.1f alpha=%.2f",
                  min_timeout, max_timeout, margin, sigma_mult, alpha)
