@@ -1,5 +1,5 @@
 #!/bin/bash
-# Klipper TRSYNC Adaptive Timeout 安装脚本
+# Klipper TRSYNC Timeout Fix 安装脚本
 
 set -e
 
@@ -33,6 +33,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 默认 Klipper 路径
 KLIPPER_PATH="${HOME}/klipper"
+# 默认使用简易模式
+INSTALL_MODE="simple"
 
 # 解析命令行参数
 while [[ $# -gt 0 ]]; do
@@ -41,11 +43,18 @@ while [[ $# -gt 0 ]]; do
             KLIPPER_PATH="$2"
             shift 2
             ;;
+        --mode)
+            INSTALL_MODE="$2"
+            shift 2
+            ;;
         --help)
             echo "用法: $0 [选项]"
             echo ""
             echo "选项:"
             echo "  --klipper-path PATH    指定 Klipper 安装路径 (默认: ~/klipper)"
+            echo "  --mode MODE            安装模式: simple 或 adaptive (默认: simple)"
+            echo "                         simple: 直接修改固定超时值 (稳定，推荐)"
+            echo "                         adaptive: 自适应超时算法 (实验性)"
             echo "  --help                 显示此帮助信息"
             exit 0
             ;;
@@ -57,7 +66,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-print_info "Klipper TRSYNC Adaptive Timeout 安装脚本"
+if [ "$INSTALL_MODE" != "simple" ] && [ "$INSTALL_MODE" != "adaptive" ]; then
+    print_error "无效的模式: $INSTALL_MODE (只能是 simple 或 adaptive)"
+    exit 1
+fi
+
+print_info "Klipper TRSYNC Timeout Fix 安装脚本 - 模式: $INSTALL_MODE"
 echo ""
 
 # 检查 Klipper 路径
@@ -75,56 +89,47 @@ fi
 print_info "找到 Klipper 安装: $KLIPPER_PATH"
 
 # 备份原始文件
-print_info "备份原始文件..."
-BACKUP_DIR="$KLIPPER_PATH/klippy/.backup_trsync_adaptive_$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$BACKUP_DIR"
+BACKUP_FILE="$KLIPPER_PATH/klippy/mcu.py.backup_$(date +%Y%m%d_%H%M%S)"
+cp "$KLIPPER_PATH/klippy/mcu.py" "$BACKUP_FILE"
+print_info "已备份: $BACKUP_FILE"
 
-if [ -f "$KLIPPER_PATH/klippy/mcu.py" ]; then
-    cp "$KLIPPER_PATH/klippy/mcu.py" "$BACKUP_DIR/mcu.py"
-    print_info "已备份: mcu.py -> $BACKUP_DIR/mcu.py"
-fi
+if [ "$INSTALL_MODE" = "simple" ]; then
+    # 简易模式：直接修改固定超时值
+    print_info "简易模式：修改 TRSYNC_TIMEOUT 从 0.025 到 0.050"
+    sed -i 's/^TRSYNC_TIMEOUT = 0\.025$/TRSYNC_TIMEOUT = 0.050/' "$KLIPPER_PATH/klippy/mcu.py"
 
-# 复制新文件
-print_info "安装新文件..."
-
-# 复制 trsync_adaptive.py
-cp "$SCRIPT_DIR/klipper/klippy/extras/trsync_adaptive.py" \
-   "$KLIPPER_PATH/klippy/extras/trsync_adaptive.py"
-print_info "已安装: trsync_adaptive.py"
-
-# 复制 mcu.py
-cp "$SCRIPT_DIR/klipper/klippy/mcu.py" \
-   "$KLIPPER_PATH/klippy/mcu.py"
-print_info "已安装: mcu.py"
-
-# 检查 printer.cfg
-print_info "检查配置文件..."
-PRINTER_CFG="${HOME}/printer_data/config/printer.cfg"
-
-if [ ! -f "$PRINTER_CFG" ]; then
-    # 尝试旧路径
-    PRINTER_CFG="${HOME}/klipper_config/printer.cfg"
-fi
-
-if [ -f "$PRINTER_CFG" ]; then
-    if grep -q "trsync_timeout_mode" "$PRINTER_CFG"; then
-        print_warn "printer.cfg 中已存在 trsync_timeout_mode 配置"
+    if grep -q "^TRSYNC_TIMEOUT = 0.050$" "$KLIPPER_PATH/klippy/mcu.py"; then
+        print_info "修改成功"
     else
-        print_warn "需要手动配置 printer.cfg"
-        print_info "请在 [printer] 段添加以下配置："
-        echo ""
-        echo "  [printer]"
-        echo "  trsync_timeout_mode: adaptive"
-        echo "  trsync_min_timeout: 0.025"
-        echo "  trsync_max_timeout: 0.120"
-        echo "  trsync_margin: 0.008"
-        echo "  trsync_sigma_multiplier: 4.0"
-        echo "  trsync_ewma_alpha: 0.2"
-        echo ""
-        print_info "详细配置说明请参考: $SCRIPT_DIR/docs/printer.cfg.example"
+        print_error "修改失败，请检查文件"
+        exit 1
     fi
 else
-    print_warn "未找到 printer.cfg，请手动配置"
+    # 自适应模式：安装完整的 adaptive timeout 模块
+    print_info "自适应模式：安装 adaptive timeout 模块"
+
+    BACKUP_DIR="$KLIPPER_PATH/klippy/.backup_trsync_adaptive_$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$BACKUP_DIR"
+    cp "$BACKUP_FILE" "$BACKUP_DIR/mcu.py"
+
+    cp "$SCRIPT_DIR/klipper/klippy/extras/trsync_adaptive.py" \
+       "$KLIPPER_PATH/klippy/extras/trsync_adaptive.py"
+    print_info "已安装: trsync_adaptive.py"
+
+    cp "$SCRIPT_DIR/klipper/klippy/mcu.py" \
+       "$KLIPPER_PATH/klippy/mcu.py"
+    print_info "已安装: mcu.py"
+
+    print_warn "需要手动配置 printer.cfg"
+    print_info "请在 [trsync_adaptive] 段添加以下配置："
+    echo ""
+    echo "  [trsync_adaptive]"
+    echo "  trsync_min_timeout: 0.025"
+    echo "  trsync_max_timeout: 0.120"
+    echo "  trsync_margin: 0.008"
+    echo "  trsync_sigma_multiplier: 4.0"
+    echo "  trsync_ewma_alpha: 0.2"
+    echo ""
 fi
 
 # 重启 Klipper
@@ -151,13 +156,24 @@ fi
 echo ""
 print_info "安装完成！"
 echo ""
-print_info "后续步骤:"
-echo "  1. 编辑 printer.cfg 添加 adaptive timeout 配置"
-echo "  2. 重启 Klipper (如果尚未重启)"
-echo "  3. 测试 Z homing: G28 Z"
-echo "  4. 查看日志: tail -f /tmp/klippy.log | grep -i trsync"
-echo ""
-print_info "如需回退，请恢复备份文件:"
-echo "  cp $BACKUP_DIR/mcu.py $KLIPPER_PATH/klippy/mcu.py"
-echo "  rm $KLIPPER_PATH/klippy/extras/trsync_adaptive.py"
-echo "  sudo systemctl restart klipper"
+
+if [ "$INSTALL_MODE" = "simple" ]; then
+    print_info "TRSYNC 超时已从 25ms 增加到 50ms (简易模式)"
+    echo ""
+    print_info "如需回退:"
+    echo "  cp $BACKUP_FILE $KLIPPER_PATH/klippy/mcu.py"
+    echo "  sudo systemctl restart klipper"
+else
+    print_info "自适应超时模块已安装 (实验性)"
+    echo ""
+    print_info "后续步骤:"
+    echo "  1. 编辑 printer.cfg 添加 [trsync_adaptive] 配置段"
+    echo "  2. 重启 Klipper (如果尚未重启)"
+    echo "  3. 测试 Z homing: G28 Z"
+    echo "  4. 查看日志: tail -f /tmp/klippy.log | grep -i trsync"
+    echo ""
+    print_info "如需回退:"
+    echo "  cp $BACKUP_FILE $KLIPPER_PATH/klippy/mcu.py"
+    echo "  rm $KLIPPER_PATH/klippy/extras/trsync_adaptive.py"
+    echo "  sudo systemctl restart klipper"
+fi
