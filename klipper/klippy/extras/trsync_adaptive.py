@@ -7,6 +7,8 @@ import logging, math
 
 # 全局配置存储
 _trsync_adaptive_configs = {}
+# 全局实例缓存，避免重复初始化
+_trsync_adaptive_instances = {}
 
 class TRSyncAdaptive:
     """
@@ -55,9 +57,11 @@ class TRSyncAdaptive:
         try:
             clocksync = self.mcu._clocksync
             if clocksync is None:
+                logging.debug("TRSyncAdaptive: clocksync is None for MCU '%s'", self.mcu.get_name())
                 return None
             # min_half_rtt 是单程时间，单位是秒
             rtt = clocksync.min_half_rtt
+            logging.debug("TRSyncAdaptive: RTT=%.6f for MCU '%s'", rtt, self.mcu.get_name())
             if rtt > 0 and rtt < 999999999.0:
                 return rtt
         except Exception as e:
@@ -72,12 +76,13 @@ class TRSyncAdaptive:
             return
 
         if not self.initialized:
-            # 首次初始化
+            # 首次初始化 - 使用保守的初始方差估计
             self.rtt_avg = rtt
-            self.rtt_var = (rtt * 0.1) ** 2  # 初始方差设为 10% RTT
+            # 初始方差设为 RTT 的 50%，确保有足够的安全余量
+            self.rtt_var = (rtt * 0.5) ** 2
             self.initialized = True
-            logging.info("TRSyncAdaptive first RTT for MCU '%s': %.6f s",
-                        self.mcu.get_name(), rtt)
+            logging.info("TRSyncAdaptive first RTT for MCU '%s': %.6f s (std=%.6f)",
+                        self.mcu.get_name(), rtt, rtt * 0.5)
         else:
             # EWMA 更新
             diff = rtt - self.rtt_avg
@@ -108,11 +113,27 @@ class TRSyncAdaptive:
 
         return timeout
 
+def get_trsync_adaptive(config_dict, mcu):
+    """获取或创建 TRSyncAdaptive 实例（使用缓存避免重复初始化）"""
+    mcu_name = mcu.get_name()
+    if mcu_name not in _trsync_adaptive_instances:
+        _trsync_adaptive_instances[mcu_name] = TRSyncAdaptive(config_dict, mcu)
+        logging.info("Created new TRSyncAdaptive instance for MCU '%s'", mcu_name)
+    else:
+        logging.info("Reusing existing TRSyncAdaptive instance for MCU '%s'", mcu_name)
+    return _trsync_adaptive_instances[mcu_name]
+
+class TRSyncAdaptiveConfig:
+    """配置占位对象，用于满足 Klipper 的模块加载要求"""
+    def __init__(self, config):
+        self.printer = config.get_printer()
+
 def load_config(config):
     """Klipper 模块加载入口 - 支持 [trsync_adaptive] 配置段"""
-    # 这里读取并验证配置参数，但实际的 TRSyncAdaptive 对象由 TriggerDispatch 创建
+    # 清空实例缓存，确保配置更改生效
+    _trsync_adaptive_instances.clear()
 
-    # 读取并验证参数（让 Klipper 知道这些参数是有效的）
+    # 读取并验证参数
     min_timeout = config.getfloat('trsync_min_timeout', 0.025,
                                   minval=0.010, maxval=0.500)
     max_timeout = config.getfloat('trsync_max_timeout', 0.120,
@@ -136,4 +157,6 @@ def load_config(config):
 
     logging.info("TRSyncAdaptive config section loaded: min=%.3f max=%.3f margin=%.3f sigma=%.1f alpha=%.2f",
                  min_timeout, max_timeout, margin, sigma_mult, alpha)
-    return None
+
+    # 必须返回一个对象实例，否则 Klipper 会忽略这个配置段
+    return TRSyncAdaptiveConfig(config)
