@@ -324,7 +324,7 @@ class TriggerDispatch:
     def start(self, print_time):
         reactor = self._mcu.get_printer().get_reactor()
         self._trigger_completion = reactor.completion()
-        # 延迟初始化：如果之前没有获取到配置，现在重试
+        # Lazy initialization: retry if config wasn't available during __init__
         if self._adaptive_timeout is None:
             try:
                 trsync_config_dict = trsync_adaptive._trsync_adaptive_configs.get('default')
@@ -332,7 +332,7 @@ class TriggerDispatch:
                     self._adaptive_timeout = trsync_adaptive.get_trsync_adaptive(trsync_config_dict, self._mcu)
             except:
                 pass
-        # 使用 adaptive timeout 或 fixed timeout
+        # Use adaptive or fixed timeout
         if self._adaptive_timeout is not None:
             self._adaptive_timeout.update()
             expire_timeout = self._adaptive_timeout.get_timeout()

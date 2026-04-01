@@ -7,8 +7,13 @@ import logging, math
 
 # 全局配置存储
 _trsync_adaptive_configs = {}
-# 全局实例缓存，避免重复初始化
-_trsync_adaptive_instances = {}
+
+def _get_instance_cache(printer):
+    """获取实例缓存（存储在 Printer 对象中以避免模块重载时丢失）"""
+    if not hasattr(printer, '_trsync_adaptive_instances'):
+        logging.info("Creating new cache on Printer object (id=%s)", id(printer))
+        printer._trsync_adaptive_instances = {}
+    return printer._trsync_adaptive_instances
 
 class TRSyncAdaptive:
     """
@@ -50,6 +55,18 @@ class TRSyncAdaptive:
         logging.info("TRSyncAdaptive initialized for MCU '%s': "
                      "min=%.3f max=%.3f margin=%.3f sigma_mult=%.1f alpha=%.2f",
                      mcu.get_name(), self.min_timeout, self.max_timeout,
+                     self.margin, self.sigma_mult, self.alpha)
+
+    def update_config(self, config_dict):
+        """更新配置参数（保留 RTT 统计数据）"""
+        self.min_timeout = config_dict['min_timeout']
+        self.max_timeout = config_dict['max_timeout']
+        self.margin = config_dict['margin']
+        self.sigma_mult = config_dict['sigma_multiplier']
+        self.alpha = config_dict['ewma_alpha']
+        logging.info("TRSyncAdaptive config updated for MCU '%s': "
+                     "min=%.3f max=%.3f margin=%.3f sigma_mult=%.1f alpha=%.2f",
+                     self.mcu.get_name(), self.min_timeout, self.max_timeout,
                      self.margin, self.sigma_mult, self.alpha)
 
     def _get_rtt(self):
@@ -115,13 +132,20 @@ class TRSyncAdaptive:
 
 def get_trsync_adaptive(config_dict, mcu):
     """获取或创建 TRSyncAdaptive 实例（使用缓存避免重复初始化）"""
+    printer = mcu.get_printer()
+    cache = _get_instance_cache(printer)
     mcu_name = mcu.get_name()
-    if mcu_name not in _trsync_adaptive_instances:
-        _trsync_adaptive_instances[mcu_name] = TRSyncAdaptive(config_dict, mcu)
+    logging.info("get_trsync_adaptive called for MCU '%s', cache keys: %s",
+                 mcu_name, list(cache.keys()))
+    if mcu_name not in cache:
+        cache[mcu_name] = TRSyncAdaptive(config_dict, mcu)
         logging.info("Created new TRSyncAdaptive instance for MCU '%s'", mcu_name)
     else:
-        logging.info("Reusing existing TRSyncAdaptive instance for MCU '%s'", mcu_name)
-    return _trsync_adaptive_instances[mcu_name]
+        # 复用实例，但更新配置
+        instance = cache[mcu_name]
+        instance.update_config(config_dict)
+        logging.debug("Reusing existing TRSyncAdaptive instance for MCU '%s'", mcu_name)
+    return cache[mcu_name]
 
 class TRSyncAdaptiveConfig:
     """配置占位对象，用于满足 Klipper 的模块加载要求"""
@@ -130,9 +154,6 @@ class TRSyncAdaptiveConfig:
 
 def load_config(config):
     """Klipper 模块加载入口 - 支持 [trsync_adaptive] 配置段"""
-    # 清空实例缓存，确保配置更改生效
-    _trsync_adaptive_instances.clear()
-
     # 读取并验证参数
     min_timeout = config.getfloat('trsync_min_timeout', 0.025,
                                   minval=0.010, maxval=0.500)
